@@ -91,6 +91,17 @@ approaches:
   depends on SOME_SUBSYSTEM
   ```
 
+## Review Checks for Kconfig and defconfig Changes
+
+A dependency that cannot be satisfied leaves a symbol silently off, and a
+`select` that ignores dependencies builds configurations that cannot work.
+Apply these to every patch that modifies a Kconfig file or a defconfig:
+
+- Verify that any new or modified `depends on` or `select` statements do not create circular dependencies.
+- Ensure that `select` is used safely (it does not select symbols with unmet dependencies). Prefer `depends on` over `select` for visible symbols.
+- Check for "silent disable" issues: Ensure that when a config is enabled (e.g., via default values, selected, or in defconfigs), all of its upstream `depends on` requirements are satisfiable. Otherwise, it may appear enabled but fail to actually enable due to missing dependencies.
+- Check that new configs have appropriate help text and default values.
+
 ## Quick Checks
 
 - **Selected symbol existence**: Verify every `select FOO` references a

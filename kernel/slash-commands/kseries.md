@@ -115,11 +115,13 @@ For each commit in the series (in chronological order):
 
 3. **Execute full review-core.md protocol** for this single commit:
    - Load all required files (technical-patterns.md, subsystem guides, etc.)
-   - Follow ALL tasks from review-core.md (Task 0 through Task 5)
+   - Follow ALL tasks from review-core.md (Task 0 through Task 4)
    - When checking for fixes/regressions, consider:
      * Forward fixes: Are regressions introduced here fixed by later commits in the series?
      * Series-wide patterns: Does this commit make assumptions that later commits break?
-   - Create review-inline.txt and review-metadata.json for THIS commit if regressions found
+   - Create review-inline.txt and review-metadata.json for THIS commit if regressions found.
+     Pass `--report-dir <sha>` to `scripts/kreview.py finish` so that each
+     commit's files go into its own directory
    - Output FINAL REGRESSIONS FOUND for this commit
 
 4. **Series-aware regression checking**:

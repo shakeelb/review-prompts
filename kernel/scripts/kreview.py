@@ -1504,6 +1504,7 @@ def cmd_finish(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     out_dir = Path(args.report_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     inline_path = out_dir / "review-inline.txt"
     if findings:
         inline_path.write_text(render_report(state, files, findings, summary))

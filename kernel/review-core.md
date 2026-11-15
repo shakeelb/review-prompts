@@ -32,26 +32,45 @@ correct - otherwise report them as regressions.
 ## What this is NOT
 - Quick sanity check
 
-## PREPARED CONTEXT (do this first)
+## WHAT TO LOAD, AND WHEN
+
+Each file below is long, and most reviews need only some of them.  Load a
+file when its row applies and not before.  All of them are in the prompt
+directory.
+
+| When | Load |
+|------|------|
+| Now | `technical-patterns.md`, `subsystem/build.md`, and the review pack described next |
+| The review pack could not be built | `context-gathering.md` |
+| Task 2, the patch is non-trivial | `callstack.md` |
+| Task 2, the patch adds a new entry point | `entry-point.md` |
+| Task 2, semcode lore is available | `lore-thread.md` |
+| Task 2.1, a Fixes: tag check is due | `missing-fixes-tag.md`, and `fixes-tag.md` if the commit has a Fixes: tag |
+| Task 2.3, a test review is due | `testing.md` |
+| Task 3, a regression is suspected | `false-positive-guide.md` |
+| Task 4, there is something to report | `inline-findings.md` |
+| Task 4, the review ran without `scripts/kreview.py` | `review-report.md` |
+
+Commit message tag prompts are loaded only if subjective reviews are
+requested in the prompt.  These default to off.
+
+## THE REVIEW PACK (do this first)
 
 In the tree under review, run the prompt directory's
 `scripts/kreview.py prepare <commit or patch file>`, unless
 `./review-context/pack.md` already exists and its first line names the
-commit under review.  The script gathers what the tasks
-below would otherwise fetch one call at a time: the commit message, the
-diff with every enclosing function in full, the functions the change calls,
-the call sites in its callers, the types it uses and the subsystem rules
-that apply.
+commit under review.  The script gathers what a review would otherwise
+fetch one call at a time: the commit message, the diff with every enclosing
+function in full, the functions the change calls, the call sites in its
+callers, the types it uses and the subsystem rules that apply.
 
-Read all of `./review-context/pack.md`, once; a large pack takes more than
-one read.  With the pack loaded:
+Read all of `./review-context/pack.md`, once.  A large pack takes more than
+one read.
 
-- Its subsystem rules are the result of "Subsystem Guides MUST be loaded"
-  and of PATTERN DETECTION below.
-- TASK 1 is done for everything the pack contains.  Fetch only what it
-  lists as not shown, and whatever else the analysis turns out to need.
-- TASK 4 and Task 5 end with `scripts/kreview.py finish` instead of files
-  written by hand, as TASK 4 describes.
+The subsystem rules in the pack end with the titles of the guide sections
+that were left out.  Those titles are part of your instructions: when the
+analysis reaches code that a left-out section is about, print that section
+with the command given next to the titles and read it before continuing.
 
 If `prepare` reports that the change is too large to review in one context,
 it has written no pack.  Stop following this prompt: read `agent/orc.md` in
@@ -59,46 +78,14 @@ the prompt directory and follow it instead.  The files its first phase makes
 are already in `./review-context/`.  If you were asked for a single-agent
 review, run `prepare` again with `--single` and carry on here.
 
-If the script cannot be run, skip this section.  Everything below works
-without it.
-
-## FILE LOADING INSTRUCTIONS
-
-### Core Files (ALWAYS LOAD FIRST)
-1. `technical-patterns.md` - Consolidated guide to kernel topics
-2. `subsystem/build.md` - Baseline build system and toolchain expectations
-
-### Subsystem Guides MUST be loaded
-
-The review pack already holds them.  Without a pack, run the prompt
-directory's `scripts/kreview.py guides <commit or patch file>` in the tree
-under review and read all of its output.  Either way the trigger table in
-`subsystem/subsystem.md` has been applied to the change, and you have the
-guide sections that apply to it followed by the titles of the sections left
-out.  Those titles are part of your instructions: when the analysis reaches
-code that a left-out section is about, print that section with the command
-given next to the titles and read it before continuing.
-
-Only if the script cannot be run: read `subsystem/subsystem.md` and load all
-matching subsystem guides and critical patterns.
-
-### Commit Message Tags (load if subjective reviews are requested in prompt)
-
-These default to off
-
+If the script cannot be run, load `context-gathering.md` and follow it for
+the subsystem guides and for TASK 1.
 
 ## EXCLUSIONS
 - Ignore fs/bcachefs regressions
 - Ignore test program issues unless system crash, except for TASK 2.3 test
   review findings
 - Don't report assertion/WARN/BUG removals as regressions
-
-## PATTERN DETECTION (check BEFORE Task 0)
-
-The subsystem rules in the review pack, or the output of
-`scripts/kreview.py guides`, are the result of this step.  If the script
-could not be run, scan the diff against all triggers in
-`subsystem/subsystem.md` and load matching files IMMEDIATELY.
 
 ## Task 0: CONTEXT MANAGEMENT
 - Discard non-essential details after each task to manage token limits
@@ -126,41 +113,19 @@ could not be run, scan the diff against all triggers in
 ### TASK 1: Context Gathering []
 **Goal**: Build complete understanding of changed code
 
-If the review pack was loaded, it already holds the diff, every changed
-function in full, the functions they call, the call sites in their callers
-and the types the changed lines use.  Do not fetch any of that again.  A
-callee the change merely passes through is there as a signature, and a
-caller as the code around its calls: fetch the body with the steps below
-when the analysis depends on what that function does, along with anything
-else the pack lists as not shown or the analysis needs beyond it.
+The review pack already holds the diff, every changed function in full, the
+functions they call, the call sites in their callers and the types the
+changed lines use.  Do not fetch any of that again.  A callee the change
+merely passes through is there as a signature, and a caller as the code
+around its calls: fetch the body when the analysis depends on what that
+function does, along with anything else the pack lists as not shown or the
+analysis needs beyond it.  Use the semcode MCP tools for that when they are
+available (`find_function`, `find_type`, `find_callers`, `find_calls`,
+`find_callchain`, `grep_functions`), and grep and git when they are not.
 
-1. **Using semcode MCP (preferred)**:
-   - `diff_functions`: identify changed functions and types
-   - `find_function/find_type`: get definitions for all identified items
-     - both of these accept a regex for the name, use this before grepping through the sources for definitions
-   - `find_callchain`: trace call relationships
-     - spot check call relationships, especially to understand proper API usage
-     - use arguments to limit callchain depth up and/or down.
-   - `find_callers` (who calls X) / `find_calls` (what does X call):
-     - Check at least one level up and one level down, more if needed.
-     - spot check other call relationships as required
-     - Always trace cleanup paths and error handling
-   - `grep_functions`: search function bodies for regex patterns.
-     - returns matching lines by default (verbose=false).  When verbose=true is used, also returns entire function body
-     - use verbose=false first to find matching lines, then use semcode find_function to pull in functions you're interested in
-     - use verbose=true only with detailed regexes where you want full function bodies for every result
-     - can return a huge number of results, use path regex option to limit results to avoid avoid filling context
-     - searches inside of function bodies.  Don't try to do multi-line greps,
-       don't try to add curly brackets to limit the result inside of functions
-   - If the current commit has deleted a function, semcode won't be able to
-     find it unless you search the parent commit.
+Without a pack, `context-gathering.md` says how to gather all of it.
 
-2. **Without semcode (fallback)**:
-   - Use `git show <sha>` to identify changes. Do not use `git diff` against HEAD: `review_one.sh` checks out a worktree with the commit applied, so `git diff` will be empty.
-   - Manually find function definitions and relationships with grep and other tools
-   - Document any missing context that affects research quality
-
-3. Never use fragments of code from the diff without first trying to find the
+Never use fragments of code from the diff without first trying to find the
 entire function or type in the sources.  Always prefer full context over
 diff fragments.
 
@@ -205,26 +170,8 @@ This deep dive analysis will take a long time, don't skip steps.
 
 0b. **New entry point analysis** (mandatory when the patch adds a new
    entry point — ioctl, syscall, sysfs write, hook, exported API — into
-   existing internal machinery):
-   - Precondition inventory: list every assumption the reused machinery
-     makes (locks held, SRCU, vcpu/task loaded or initialized, first-run
-     or first-use side effects, feature-mode state). For each, show
-     where the new caller establishes it, or prove it cannot matter.
-     "The existing callers do it" is not evidence the new caller does.
-   - Input-space sweep: enumerate the flag/mode dimensions of every
-     object the entry point consumes (for KVM: memslot flags, VM type,
-     protected/nested/mode variants) and trace one path per value
-     class. The bug lives in the class nobody named in the commit
-     message.
-   - Emulation parity: if the entry point claims to mirror an existing
-     path ("as if X happened"), build a two-column table of helper
-     calls (reference path vs new path). Every asymmetry must be
-     justified or reported. Pay attention to helper variants whose
-     names differ by a suffix (_prot, _atomic, __locked): they usually
-     differ in exactly one semantic the new path forgot about.
-   - Output: `ENTRY-POINT: none` or the precondition inventory,
-     input-space classes traced, and the parity table (or `parity: not
-     an emulation path`)
+   existing internal machinery): load `entry-point.md` and complete it.
+   - Output: `ENTRY-POINT: none`, or the output `entry-point.md` asks for
 
 1. If the patch is non-trivial: read and fully analyze callstack.md
   - **MANDATORY VALIDATION**: Have you read and callstack.md for non-trivial changes? [ y / n ]
@@ -239,26 +186,11 @@ This deep dive analysis will take a long time, don't skip steps.
 the change for regressions.
 
 3. If semcode lore is available, check for email discussion about this patch
-  - Load `lore-thread.md` for detailed instructions on processing lore threads
+  - Load `lore-thread.md` and follow it
   - Search lore for threads with the same subject as this patch, assume
     the patch you're reviewing is the latest version.
-  - Automated reviews and bot mail are not review evidence. Never treat
-    Sashiko, prior BPF CI/Claude reviews, CI bots, test robots, or any
-    other bot feedback as unaddressed review comments.
-  - If a possible regression overlaps earlier bot feedback in the thread,
-    suppress the regression entirely. Do not quote the bot, cite the bot, or
-    restate the issue as though it were independently reviewable.
-  - Consider any unaddressed comments as potential regressions
-    - Add each unaddressed comment to TodoWrite
-    - Verify each unaddressed comment as a valid complaint before reporting
-  - Output: subject lines and dates of past versions of the patch
-    ```
-    FINAL UNADDRESSED COMMENTS: NUMBER
-    Found older version: <date> <version> <subject>
-    Found older version: <date> <version2> <subject>
-    ```
-  - When the regression report mentions unaddressed review comments, provide
-    a lore link to the thread in review-inline.txt
+  - Consider any unaddressed comments as potential regressions, and verify
+    each one as a valid complaint before reporting it
 
 ### TASK 2.1 Commit tag and subject verification
 
@@ -323,11 +255,9 @@ Fixes tag check for <subsystem>
 ### TASK 2.2 Kconfig dependency verification
 
 1. Check if the patch modifies Kconfig files, defconfigs, or introduces new `CONFIG_*` usages in source files.
-2. If Kconfig files or defconfigs are modified:
-  - Verify that any new or modified `depends on` or `select` statements do not create circular dependencies.
-  - Ensure that `select` is used safely (it does not select symbols with unmet dependencies). Prefer `depends on` over `select` for visible symbols.
-  - Check for "silent disable" issues: Ensure that when a config is enabled (e.g., via default values, selected, or in defconfigs), all of its upstream `depends on` requirements are satisfiable. Otherwise, it may appear enabled but fail to actually enable due to missing dependencies.
-  - Check that new configs have appropriate help text and default values.
+2. If Kconfig files or defconfigs are modified, apply "Review Checks for
+   Kconfig and defconfig Changes" in `subsystem/kconfig.md`.  The subsystem
+   rules for such a patch include it.
 3. If new `CONFIG_*` macros are used in source code:
   - Verify that the corresponding Kconfig symbol actually exists in the tree or is added in this patch/series.
 4. Output: Kconfig check result (no Kconfig changes / Kconfig changes verified / Kconfig issues found)
@@ -363,55 +293,17 @@ Fixes tag check for <subsystem>
 
 IMPORTANT: subjective issues flagged by SR-* patterns count as regressions
 
-**If the context was prepared with `scripts/kreview.py prepare`**, the script
-writes the output files, and the rest of this task, the completion
-verification and Task 5 do not apply:
-- No regressions and no subjective issues: run `scripts/kreview.py finish`
-  from the directory `prepare` was run in.  It writes
-  `./review-metadata.json` with zero issues.
+`scripts/kreview.py finish` writes the output files.  Run it from the
+directory `prepare` was run in.
+
+- No regressions and no subjective issues: run `scripts/kreview.py finish`.
+  It writes `./review-metadata.json` with zero issues.
 - Otherwise: load `inline-findings.md` and follow it.  You write the
   questions; `scripts/kreview.py finish` builds `./review-inline.txt` around
   them and writes `./review-metadata.json`.
 
-Then go to OUTPUT FORMAT.
-
-**If no regressions found**:
-- check: were subjective issues found? [ Y/N]
-  - If yes, these are regresssions, go to "If regressions found" section
-- Mark complete and provide summary
-- Note any context limitations
-
-This step must not be skipped if there are regressions found.  You're creating
-a text file to be sent to the linux kernel mailing list.  It is absolutely
-CRITICAL this text file meets the standards of linux kernel communications
-as defined in inline-template.md.  If you fail to follow those instructions,
-the review is completely useless.
-
-**If regressions found**:
-0. Clear any context not related to the regressions themselves
-1. Load `inline-template.md`
-  - you must use inline-template.md for all analysis feedback
-2. Create `review-inline.txt` in current directory, never use the prompt directory
-3. Follow the instructions in the template carefully
-  - NEVER WRITE `REGRESSION:` INTO ./review-inline.txt THIS
-    AND ANY OTHER ALL CAPS ANALYSIS IS INCOMPATIBLE WITH LINUX KERNEL STANDARDS
-4. Never include bugs that you identified as false positives in the report
-5. Never include issues that quote, cite, summarize, or repeat automated review
-   feedback. Search case-insensitively for forbidden bot evidence (`sashiko`, `bot+bpf-ci`,
-   `kernel-patches-review-bot`, `Claude`, `AI review found`,
-   `AI reviewed your patch`, `CI run summary`, `sashiko.dev`) and remove the
-   entire affected issue.
-6. Verify the ./review-inline.txt file exists if regressions are found
-7. Verify the ./review-inline.txt file follows inline-template.md's guidelines
-
-### MANDATORY COMPLETION VERIFICATION
-
-Check ./review-inline.txt and confirm it looks like the inline-template.md
-
-Your default commentary output is unfit for kernel reviews and analysis.
-Confirm review-inline.txt follows inline-template.md, regenerate it if you've
-snuck in markdown, ALL CAPS, or somehow broken with inline-template.md's
-guidelines.
+If the review ran without `scripts/kreview.py`, load `review-report.md` and
+follow it instead.
 
 ## OUTPUT FORMAT
 Always conclude with:
@@ -419,39 +311,3 @@ Always conclude with:
 - Output: `FINAL TOKENS USED: <total tokens used in the entire session>`
  - Output: `Assisted-by: <LLM agent name>:<LLM model version>`
 - Output: Any false positives eliminated
-
-### Task 5 Review metadata output
-
-Create a json file in the current directory named ./review-metadata.json
-
-Identify an issue severity score "low", "medium", "high", "critical" for anything
-reported in ./review-inline.txt. Scores would increase in severity based on
-user-visible errors such as system crashes, instability, security problems, or
-incorrect system behavior.
-
-Create a one sentence explanation for your issue severity score.  If there are no
-issues, just use "none"
-
-If there are multiple issues, just pick the most severe, or consider the combination
-of their overall implications.
-
-The file should be created for every analysis, even if bugs were not found.
-If the file already exists, it should be completely replaced.
-
-./review-metadata.json will be parsed by other programs.
-
-CRITICAL: DO NOT INVENT OTHER FIELDS FOR ./review-metadata.json.  IT MUST HAVE
-THESE EXACT FIELDS IN THIS EXACT FORMAT.  DEVIATION IS NOT ALLOWED.
-
-```json
-{
-  "author": "<string commit author>",
-  "sha": "<string sha of the commit>",
-  "subject": "<string commit subject>",
-  "issues-found": <number>,
-  "issue-severity-score": "<none/low/medium/high/critical>",
-  "issue-severity-explanation": "<string, result of Task 5 analysis>"
-}
-```
-
-- Ensure ./review-metadata.json exists and has the correct format
