@@ -118,12 +118,16 @@ are selected one by one.  The titles of everything left out are listed, and
 `section` prints any of them.  All the rules for one change are capped at
 24 KB; past that, guides matched by a symbol are dropped first.
 
-`--list` prints the matching guides without their text.  `--for` names the
-guides for some paths and symbols, for work that is not a review of a
-change:
+`--list` prints the matching guides without their text.
+
+`--for` is for work that is not a review of a change.  It takes the files
+and the APIs someone is working with and prints the rules for them the same
+way: the paths stand in for the files a change touches, and the symbols for
+the names on its changed lines.  The kernel skill uses it to load subsystem
+knowledge for the code at hand.
 
 ```bash
-kreview.py guides --for mm/slub.c call_rcu
+kreview.py guides --for mm/slub.c kmalloc_node call_rcu
 ```
 
 ---

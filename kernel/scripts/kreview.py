@@ -13,7 +13,7 @@ that work instead:
                                         review-inline.txt and review-metadata.json
   kreview.py guides [REF|PATCH]        print the subsystem rules that apply
                                         to a commit or a patch file
-  kreview.py guides --for ITEM...      name the guides for paths or symbols
+  kreview.py guides --for ITEM...      print the rules for paths and symbols
   kreview.py section GUIDE TITLE       print one section of a guide
 
 Guide selection applies the trigger table in subsystem/subsystem.md, so the
@@ -594,7 +594,7 @@ def render_rules(selected: list[GuideRules]) -> str:
     for rules in selected:
         m = rules.match
         why = {"path": f"path matches {m.trigger}",
-               "changed": f"the change uses {m.trigger}",
+               "changed": f"matches {m.trigger}",
                "context": f"{m.trigger} in surrounding code"}[m.strength]
         if not rules.whole and not rules.shown:
             nearby.append(f"{m.file} ({why})")
@@ -618,7 +618,7 @@ def render_rules(selected: list[GuideRules]) -> str:
                    f"  {script} section GUIDE.md \"TITLE\"\n"
                    f"or read the whole guide in {GUIDE_DIR}/\n")
     if not out:
-        return "No subsystem guide matches this change.\n"
+        return "No subsystem guide matches.\n"
     return "".join(out)
 
 
@@ -1540,20 +1540,14 @@ def cmd_finish(args: argparse.Namespace) -> None:
 def cmd_guides(args: argparse.Namespace) -> None:
     rows = parse_trigger_table()
     if args.items:
-        # Ad hoc: name the guides for some paths and symbols.
+        # Not a review: the files and APIs someone is working with stand in
+        # for the paths a change touches and the names on its changed lines.
         paths = [i for i in args.items if is_path_like(i)]
         symbols = "\n".join(i for i in args.items if i not in paths)
-        matches = [m for m in match_guides(rows, paths, symbols, "")
-                   if (GUIDE_DIR / m.file).is_file()]
-        if not matches:
-            print("No subsystem guide matches.")
-            return
-        for m in matches:
-            size = (GUIDE_DIR / m.file).stat().st_size
-            print(f"{guide_path(m.file)}  ({m.name}; matched {m.trigger}; {size} bytes)")
-        return
-
-    change = load_change(args.change, args.git_dir, function_context=True)
+        change = Change(ref="", sha=None, subject="", message="", diff="",
+                        paths=paths, changed=symbols)
+    else:
+        change = load_change(args.change, args.git_dir, function_context=True)
     selected = select_rules(change, rows)
     if args.list:
         for rules in selected:
@@ -1561,8 +1555,11 @@ def cmd_guides(args: argparse.Namespace) -> None:
             state = "whole" if rules.whole else "sections" if rules.shown else "not loaded"
             print(f"{m.file}\t{m.strength}\t{m.trigger}\t{state}\t{rules.size}")
         return
-    where = change.sha[:12] if change.sha else os.path.basename(change.ref)
-    print(f"Subsystem rules for {where} (\"{change.subject}\")\n")
+    if args.items:
+        print(f"Subsystem rules for {' '.join(args.items)}\n")
+    else:
+        where = change.sha[:12] if change.sha else os.path.basename(change.ref)
+        print(f"Subsystem rules for {where} (\"{change.subject}\")\n")
     sys.stdout.write(render_rules(selected))
 
 
@@ -1597,7 +1594,7 @@ def main() -> None:
     guides.add_argument("change", nargs="?", default="HEAD",
                         help="commit reference or patch file (default: HEAD)")
     guides.add_argument("--for", dest="items", nargs="+", metavar="ITEM",
-                        help="name the guides for these paths and symbols instead")
+                        help="print the rules for these paths and symbols instead of a change")
     guides.add_argument("--list", action="store_true",
                         help="list the matching guides without their text")
     guides.add_argument("-C", "--git-dir", default=None, help="git repository directory")
