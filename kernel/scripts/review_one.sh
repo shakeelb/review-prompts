@@ -169,6 +169,12 @@ if [ -f review-inline.txt ]; then
     mv review-inline.txt "review-inline.$nowstr.txt"
 fi
 
+# Gather the commit, the code around it and the matching subsystem rules
+# into ./review-context/pack.md, so the model does not fetch them one call
+# at a time.  The review works without the pack, so a failure is not fatal.
+"$SCRIPT_DIR/kreview.py" prepare "$SHA" ||
+    echo "Warning: kreview.py prepare failed, reviewing without a pack" >&2
+
 echo "Worktree ready at $DIR"
 echo "SHA: $SHA"
 

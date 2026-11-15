@@ -66,6 +66,13 @@ The agent will chat its way through the code review, and that output is
 pretty useful.  If regressions are found, it creates a review-inline.txt
 file, which is meant to look like an email that would be sent to lkml.
 
+The parts of a review that need no judgement are done by
+[scripts/kreview.py](scripts/scripts.md#kreviewpy): it gathers the commit,
+the code around it and the matching subsystem rules into one file before
+the review, and afterwards quotes the diff around the agent's questions to
+build review-inline.txt.  review-core.md runs it and falls back to doing
+the work by hand when it cannot.
+
 sample.txt has examples of regressions.
 
 ## False positives

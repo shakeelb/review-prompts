@@ -21,6 +21,58 @@ Does the parts of a review that need no judgement, so that the model spends
 neither context nor turns on them.  The prompts call it by its path in the
 prompt directory; nothing needs to be installed.
 
+### prepare
+
+```bash
+kreview.py prepare [-C <linux_dir>] [-o <dir>] [--no-semcode] [<commit_ref> | <patch_file>]
+```
+
+Writes `./review-context/pack.md`, one file with what a review otherwise
+fetches one call at a time:
+
+| Part | Content |
+|------|---------|
+| 1. Commit | Header and message, as `git log` prints them |
+| 2. The change | `git show -W`: the diff with every enclosing function in full.  A plain diff when that is over 60 KB.  For a patch file, the plain diff followed by the functions it changes as they are in the tree, up to 30 KB |
+| 3. Functions the change calls | Their definitions, up to 30 KB: calls on changed lines first, then the shortest |
+| 4. Callers of the changed functions | Up to five per function, up to 12 KB |
+| 5. Types the changed lines use | Definitions of up to 100 lines, up to 8 KB |
+| 6. Subsystem rules that apply | The output of `guides`, below |
+
+Parts 3 to 5 come from semcode and are left out, with a note, when the tree
+has no `.semcode.db` or `semcode` is not in `PATH`.  Whatever a budget keeps
+out is listed by name so the model can fetch it.  Function bodies are read
+at `HEAD`, so run `prepare` in a tree checked out at the commit under
+review, as `review_one.sh` does.
+
+Next to the pack it writes `prepare.json` (commit facts and the size of
+each part) and `diff.patch`, which `finish` reads.
+
+`review-core.md` runs `prepare` itself when the pack is not there yet.
+
+### finish
+
+```bash
+kreview.py finish [-o <dir>] [--findings <file>] [--report-dir <dir>]
+```
+
+Turns the findings the model wrote into the two output files of a review.
+The model writes `./review-context/findings.txt` as `inline-findings.md`
+describes: a severity, a one-sentence explanation, a summary of the commit,
+and for each finding the diff line it belongs under and the comment.
+`finish` then:
+
+- finds each line in the diff and quotes the diff around the comments,
+  snipping the files and hunks without one;
+- wraps the comments at 78 columns and strips markdown markers;
+- refuses to write anything, and says what to fix, when a comment cannot be
+  placed, cites automated review output, uses headings or all-caps labels,
+  or refers to a line number;
+- writes `./review-inline.txt` when there are findings, and always writes
+  `./review-metadata.json` with the six fields `review-core.md` documents.
+
+With no findings file it writes the metadata for a clean review.
+
 ### guides
 
 ```bash
@@ -223,12 +275,13 @@ review_one.sh [options] <sha>
 
 1. Creates a git worktree at `linux.<sha>` for the specified commit
 2. If the base linux directory has `.semcode.db`, hard-links it into the worktree and configures MCP
-3. Runs Claude with the review prompt
-4. Outputs results to:
+3. Runs `kreview.py prepare` in the worktree, so the review starts from `./review-context/pack.md`
+4. Runs Claude with the review prompt
+5. Outputs results to:
    - `review.json` - Raw Claude output (stream-json format)
    - `review.md` - Parsed markdown review
    - `review.duration.txt` - Elapsed time
-5. Retries up to 5 times if Claude exits without output
+6. Retries up to 5 times if Claude exits without output
 
 ### Directory Structure Assumptions
 
@@ -237,6 +290,7 @@ review_one.sh [options] <sha>
 | Path | Description |
 |------|-------------|
 | `$SCRIPT_DIR/claude-json.py` | JSON parser script (must be in same directory) |
+| `$SCRIPT_DIR/kreview.py` | Builds the review pack (must be in same directory) |
 | `$SCRIPT_DIR/../review-core.md` | Default review prompt (parent directory of scripts/) |
 
 Where `$SCRIPT_DIR` is the directory containing `review_one.sh`.

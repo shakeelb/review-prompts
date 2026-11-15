@@ -32,6 +32,29 @@ correct - otherwise report them as regressions.
 ## What this is NOT
 - Quick sanity check
 
+## PREPARED CONTEXT (do this first)
+
+In the tree under review, run the prompt directory's
+`scripts/kreview.py prepare <commit or patch file>`, unless
+`./review-context/pack.md` already exists and its first line names the
+commit under review.  The script gathers what the tasks
+below would otherwise fetch one call at a time: the commit message, the
+diff with every enclosing function in full, the functions the change calls,
+its callers, the types it uses and the subsystem rules that apply.
+
+Read all of `./review-context/pack.md`, once; a large pack takes more than
+one read.  With the pack loaded:
+
+- Its subsystem rules are the result of "Subsystem Guides MUST be loaded"
+  and of PATTERN DETECTION below.
+- TASK 1 is done for everything the pack contains.  Fetch only what it
+  lists as not shown, and whatever else the analysis turns out to need.
+- TASK 4 and Task 5 end with `scripts/kreview.py finish` instead of files
+  written by hand, as TASK 4 describes.
+
+If the script cannot be run, skip this section.  Everything below works
+without it.
+
 ## FILE LOADING INSTRUCTIONS
 
 ### Core Files (ALWAYS LOAD FIRST)
@@ -40,14 +63,14 @@ correct - otherwise report them as regressions.
 
 ### Subsystem Guides MUST be loaded
 
-In the tree under review, run the prompt directory's
-`scripts/kreview.py guides <commit or patch file>` and read all of its
-output.  It applies the trigger table in `subsystem/subsystem.md` to the
-change and prints the guide sections that apply to it, followed by the
-titles of the sections it left out.  Those titles are part of your
-instructions: when the analysis reaches code that a left-out section is
-about, print that section with the command the output gives and read it
-before continuing.
+The review pack already holds them.  Without a pack, run the prompt
+directory's `scripts/kreview.py guides <commit or patch file>` in the tree
+under review and read all of its output.  Either way the trigger table in
+`subsystem/subsystem.md` has been applied to the change, and you have the
+guide sections that apply to it followed by the titles of the sections left
+out.  Those titles are part of your instructions: when the analysis reaches
+code that a left-out section is about, print that section with the command
+given next to the titles and read it before continuing.
 
 Only if the script cannot be run: read `subsystem/subsystem.md` and load all
 matching subsystem guides and critical patterns.
@@ -65,8 +88,9 @@ These default to off
 
 ## PATTERN DETECTION (check BEFORE Task 0)
 
-The output of `scripts/kreview.py guides` is the result of this step.  If the
-script could not be run, scan the diff against all triggers in
+The subsystem rules in the review pack, or the output of
+`scripts/kreview.py guides`, are the result of this step.  If the script
+could not be run, scan the diff against all triggers in
 `subsystem/subsystem.md` and load matching files IMMEDIATELY.
 
 ## Task 0: CONTEXT MANAGEMENT
@@ -94,6 +118,13 @@ script could not be run, scan the diff against all triggers in
 
 ### TASK 1: Context Gathering []
 **Goal**: Build complete understanding of changed code
+
+If the review pack was loaded, it already holds the diff, every changed
+function in full, the functions they call, their callers and the types the
+changed lines use.  Do not fetch any of that again; use the steps below only
+for what the pack lists as not shown and for what the analysis needs beyond
+it.
+
 1. **Using semcode MCP (preferred)**:
    - `diff_functions`: identify changed functions and types
    - `find_function/find_type`: get definitions for all identified items
@@ -322,6 +353,18 @@ Fixes tag check for <subsystem>
 **Goal**: Create clear, actionable report
 
 IMPORTANT: subjective issues flagged by SR-* patterns count as regressions
+
+**If the context was prepared with `scripts/kreview.py prepare`**, the script
+writes the output files, and the rest of this task, the completion
+verification and Task 5 do not apply:
+- No regressions and no subjective issues: run `scripts/kreview.py finish`
+  from the directory `prepare` was run in.  It writes
+  `./review-metadata.json` with zero issues.
+- Otherwise: load `inline-findings.md` and follow it.  You write the
+  questions; `scripts/kreview.py finish` builds `./review-inline.txt` around
+  them and writes `./review-metadata.json`.
+
+Then go to OUTPUT FORMAT.
 
 **If no regressions found**:
 - check: were subjective issues found? [ Y/N]
