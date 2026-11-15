@@ -96,6 +96,15 @@ load them.
 
 **BATCH ALL find_calls AND find_function CALLS IN ONE MESSAGE**
 
+- If `review-core.md` had you load a review pack for this change, its part
+  3 is steps callee.1 and callee.2.  It gives the body of every callee
+  whose call the change adds or removes and of every callee up to 30 lines
+  long, and the signature of the longer ones.  Load the body of a
+  signature-only callee when the change alters what reaches it (its
+  arguments, the locks or context it is called under, the state it reads),
+  or when its result or side effects decide a path through the changed
+  code.
+  - Output: the callees left as signatures, and why each did not need its body
 - Step callee.1: Identify all direct callees in modified functions
   - We gather the callees because even small changes in functions can
     cause bugs in the functions they call.  The only way to know is to
@@ -124,6 +133,10 @@ complete caller analysis.
 
 **BATCH ALL find_callers CALLS IN ONE MESSAGE**
 
+- If a review pack was loaded, its part 4 is steps caller.1 and caller.2,
+  with each caller cut down to the code around its calls.  Load the whole
+  caller when a check below needs more of it: a lock taken earlier, cleanup
+  after the call, or how the return value travels on.
 - For every step, consider both the callers and the arguments used
 - step caller.1: identify all direct callers
   - We gather the callers because even small changes can introduce bugs

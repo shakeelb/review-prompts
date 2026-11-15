@@ -632,6 +632,16 @@ CALLEE_BUDGET_BYTES = 30000
 CALLER_BUDGET_BYTES = 12000
 TYPE_BUDGET_BYTES = 8000
 CALLERS_PER_FUNCTION = 5
+
+# A callee is shown in full when the change adds or removes a call to it, or
+# when it is short.  A longer one that the change only passes through is
+# reduced to its signature.  Most callees are short, so this keeps the body
+# of nine in ten and drops the few long ones that make up the bulk.
+CHANGED_CALL_MAX_LINES = 80
+SHORT_HELPER_MAX_LINES = 30
+
+# Lines of a caller kept on each side of a call to a changed function.
+CALL_SITE_RADIUS = 10
 MAX_TYPE_LINES = 100
 MAX_LOOKUPS = 64
 LOOKUP_WORKERS = 8
@@ -669,6 +679,70 @@ class Definition:
 
     def brief(self) -> str:
         return f"{self.name} ({self.file}, {self.lines} lines)"
+
+    def declaration_end(self) -> int:
+        """Index of the line that opens the body, skipping leading comments."""
+        in_comment = False
+        lines = self.body.split("\n")
+        for i, line in enumerate(lines):
+            code = line
+            if in_comment:
+                if "*/" not in line:
+                    continue
+                code = line.split("*/", 1)[1]
+                in_comment = False
+            while "/*" in code:
+                before, _, rest = code.partition("/*")
+                if "*/" in rest:
+                    code = before + rest.split("*/", 1)[1]
+                else:
+                    code = before
+                    in_comment = True
+            code = code.split("//", 1)[0]
+            if "{" in code or code.startswith("#define"):
+                return i
+        return len(lines) - 1
+
+    def signature(self) -> str:
+        """The declaration alone, with the comment above it."""
+        lines = self.body.split("\n")
+        end = self.declaration_end()
+        last = lines[end]
+        if last.startswith("#define"):
+            return "\n".join(lines[:end] + [last.rstrip(" \t\\")])
+        if "}" in last:
+            # A one-line function: the whole of it is the shortest signature.
+            return "\n".join(lines[:end + 1]).rstrip()
+        if "{" in last:
+            last = last[:last.rindex("{")]
+        text = "\n".join(lines[:end] + [last]).rstrip()
+        return text if text.endswith(";") else text + ";"
+
+    def render_signature(self) -> str:
+        where = self.file + (f", under {self.under}" if self.under else "")
+        return f"/* {where}, {self.lines} lines */\n{self.signature()}\n"
+
+    def render_call_sites(self, callees: list[str]) -> str:
+        """The signature and the code around each call to one of callees."""
+        lines = self.body.rstrip().split("\n")
+        names = "|".join(map(re.escape, callees)) or "(?!)"
+        call = re.compile(r"(?<![A-Za-z0-9_])(?:" + names + r")\s*\(")
+        keep: set[int] = set(range(min(self.declaration_end() + 1, len(lines))))
+        for i, line in enumerate(lines):
+            if i not in keep and call.search(line):
+                keep.update(range(max(0, i - CALL_SITE_RADIUS),
+                                  min(len(lines), i + CALL_SITE_RADIUS + 1)))
+        out, previous = [], -1
+        for i in sorted(keep):
+            if i != previous + 1:
+                out.append("\t/* ... */")
+            out.append(lines[i])
+            previous = i
+        if previous != len(lines) - 1:
+            out.append("\t/* ... */")
+        where = self.file + (f", under {self.under}" if self.under else "")
+        shown = "whole" if len(keep) == len(lines) else f"call sites, of {self.lines} lines"
+        return f"/* {where}: {shown} */\n" + "\n".join(out) + "\n"
 
 
 def semcode_available(git_dir: Optional[str]) -> bool:
@@ -735,7 +809,8 @@ class CodeContext:
     # with its enclosing functions in full.
     changed: list[Definition] = field(default_factory=list)
     changed_left: list[str] = field(default_factory=list)
-    callees: list[Definition] = field(default_factory=list)
+    callees: list[Definition] = field(default_factory=list)   # shown in full
+    callee_signatures: list[Definition] = field(default_factory=list)
     callees_left: list[str] = field(default_factory=list)     # known, not shown
     callees_unknown: list[str] = field(default_factory=list)  # no definition found
     callers: list[Definition] = field(default_factory=list)
@@ -744,16 +819,16 @@ class CodeContext:
     types_left: list[str] = field(default_factory=list)
 
 
-def take_within(budget: int, candidates: list[Definition]) -> tuple[list[Definition], list[str]]:
+def take_within(budget: int, candidates: list[Definition],
+                size=lambda d: len(d.render())) -> tuple[list[Definition], list[Definition]]:
     """Split definitions into those that fit the budget and the rest."""
     shown, left, used = [], [], 0
     for d in candidates:
-        size = len(d.render())
-        if used + size <= budget:
+        if used + size(d) <= budget:
             shown.append(d)
-            used += size
+            used += size(d)
         else:
-            left.append(d.brief())
+            left.append(d)
     return shown, left
 
 
@@ -809,21 +884,30 @@ def gather_code(change: Change, git_dir: Optional[str], use_semcode: bool = True
     found = lookup("func", wanted + callers, git_dir)
     found_types = lookup("type", types, git_dir)
 
-    # Within the budget, calls on changed lines go first and then the
-    # shortest helpers, so that as many callees as possible are readable.
+    # A callee's body matters when the change alters how it is called, and it
+    # is cheap when it is short.  For the rest the signature says what the
+    # changed code hands over and gets back, and the body is one lookup away.
     callee_defs = [d for name in wanted for d in pick_definitions(found.get(name, []), change.paths)]
     callee_defs.sort(key=lambda d: (not called_on_changed_line(d.name), d.lines))
-    code.callees, code.callees_left = take_within(CALLEE_BUDGET_BYTES, callee_defs)
+    full = [d for d in callee_defs
+            if d.lines <= SHORT_HELPER_MAX_LINES
+            or (d.lines <= CHANGED_CALL_MAX_LINES and called_on_changed_line(d.name))]
+    code.callees, _ = take_within(CALLEE_BUDGET_BYTES, full)
+    code.callee_signatures = [d for d in callee_defs if d not in code.callees]
     code.callees_unknown = [name for name in wanted if name not in found]
-    code.callees_left += skipped
+    code.callees_left = skipped
 
+    # A caller is there to show how the changed function is used: the code
+    # around the call, not the rest of the caller.
     caller_defs = [d for name in callers for d in pick_definitions(found.get(name, []), change.paths)]
-    code.callers, code.callers_left = take_within(CALLER_BUDGET_BYTES, caller_defs)
+    code.callers, left = take_within(CALLER_BUDGET_BYTES, caller_defs,
+                                     size=lambda d: len(d.render_call_sites(code.modified)))
+    code.callers_left = [d.brief() for d in left]
 
     type_defs = [d for name in types for d in found_types.get(name, [])[:1]]
     small = [d for d in type_defs if d.lines <= MAX_TYPE_LINES]
-    code.types, code.types_left = take_within(TYPE_BUDGET_BYTES, small)
-    code.types_left += [d.brief() for d in type_defs if d.lines > MAX_TYPE_LINES]
+    code.types, left = take_within(TYPE_BUDGET_BYTES, small)
+    code.types_left = [d.brief() for d in left + [d for d in type_defs if d.lines > MAX_TYPE_LINES]]
     return code
 
 
@@ -884,18 +968,27 @@ def build_pack(change: Change, code: CodeContext, rules: str) -> tuple[str, dict
     else:
         text = "## 3. Functions the change calls\n\n"
         if code.callees:
+            text += (f"In full: callees whose call the change adds or removes (up to "
+                     f"{CHANGED_CALL_MAX_LINES} lines)\nand helpers of up to "
+                     f"{SHORT_HELPER_MAX_LINES} lines.\n\n")
             text += fenced("\n".join(d.render() for d in code.callees), "c")
-        else:
+        if code.callee_signatures:
+            text += ("\nSignature only, for the longer callees the change merely passes through.\n"
+                     "Fetch a body when the analysis depends on what the callee does.\n\n")
+            text += fenced("\n".join(d.render_signature() for d in code.callee_signatures), "c")
+        if not code.callees and not code.callee_signatures:
             text += "None found.\n"
         if code.callees_left:
-            text += "\nNot shown, to keep this file small:\n" + "".join(f"  - {n}\n" for n in code.callees_left)
+            text += "\nNot looked up: " + ", ".join(code.callees_left) + "\n"
         if code.callees_unknown:
             text += "\nNo definition found (macros, or defined elsewhere): " + ", ".join(code.callees_unknown) + "\n"
         parts.append(("callees", text))
 
         text = "## 4. Callers of the changed functions\n\n"
         if code.callers:
-            text += fenced("\n".join(d.render() for d in code.callers), "c")
+            text += (f"Each caller is cut down to its signature and {CALL_SITE_RADIUS} lines either side of\n"
+                     "every call to a changed function.  Fetch the whole caller if more is needed.\n\n")
+            text += fenced("\n".join(d.render_call_sites(code.modified) for d in code.callers), "c")
         else:
             text += "None found.\n"
         if code.callers_left:
@@ -956,6 +1049,7 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         "part-bytes": sizes,
         "functions-changed": len(code.modified),
         "callees-shown": len(code.callees),
+        "callees-signature-only": len(code.callee_signatures),
         "callees-not-shown": len(code.callees_left) + len(code.callees_unknown),
         "callers-shown": len(code.callers),
         "callers-not-shown": len(code.callers_left),

@@ -34,8 +34,8 @@ fetches one call at a time:
 |------|---------|
 | 1. Commit | Header and message, as `git log` prints them |
 | 2. The change | `git show -W`: the diff with every enclosing function in full.  A plain diff when that is over 60 KB.  For a patch file, the plain diff followed by the functions it changes as they are in the tree, up to 30 KB |
-| 3. Functions the change calls | Their definitions, up to 30 KB: calls on changed lines first, then the shortest |
-| 4. Callers of the changed functions | Up to five per function, up to 12 KB |
+| 3. Functions the change calls | In full when the change adds or removes the call (up to 80 lines) or the callee is up to 30 lines long; otherwise the signature and the comment above it.  Up to 30 KB of bodies |
+| 4. Callers of the changed functions | Up to five per function, each cut down to its signature and 10 lines either side of every call to a changed function.  Up to 12 KB |
 | 5. Types the changed lines use | Definitions of up to 100 lines, up to 8 KB |
 | 6. Subsystem rules that apply | The output of `guides`, below |
 

@@ -40,7 +40,8 @@ In the tree under review, run the prompt directory's
 commit under review.  The script gathers what the tasks
 below would otherwise fetch one call at a time: the commit message, the
 diff with every enclosing function in full, the functions the change calls,
-its callers, the types it uses and the subsystem rules that apply.
+the call sites in its callers, the types it uses and the subsystem rules
+that apply.
 
 Read all of `./review-context/pack.md`, once; a large pack takes more than
 one read.  With the pack loaded:
@@ -120,10 +121,12 @@ could not be run, scan the diff against all triggers in
 **Goal**: Build complete understanding of changed code
 
 If the review pack was loaded, it already holds the diff, every changed
-function in full, the functions they call, their callers and the types the
-changed lines use.  Do not fetch any of that again; use the steps below only
-for what the pack lists as not shown and for what the analysis needs beyond
-it.
+function in full, the functions they call, the call sites in their callers
+and the types the changed lines use.  Do not fetch any of that again.  A
+callee the change merely passes through is there as a signature, and a
+caller as the code around its calls: fetch the body with the steps below
+when the analysis depends on what that function does, along with anything
+else the pack lists as not shown or the analysis needs beyond it.
 
 1. **Using semcode MCP (preferred)**:
    - `diff_functions`: identify changed functions and types
