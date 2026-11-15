@@ -29,7 +29,11 @@ This installs:
 - **Kernel skill** (`~/.claude/skills/kernel/SKILL.md`) - Automatically loads
   kernel-specific context when working in kernel trees
 - **Slash commands** (`~/.claude/commands/`) - Quick access to common operations:
-  - `/kreview` - Review a single commit for regressions
+  - `/kreview` - Review a single commit for regressions.  One agent does
+    the review, unless the commit is too large for one context (about one
+    in a hundred), in which case it hands over to the orchestrated flow
+  - `/korcreview` - Review a single commit with the orchestrated flow, which
+    splits the work among several agents whatever the size of the commit
   - `/kseries` - Review an entire patch series (git range) commit-by-commit
   - `/kdebug` - Debug kernel crashes and warnings
   - `/kverify` - Verify findings against false positive patterns

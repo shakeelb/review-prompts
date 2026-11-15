@@ -650,6 +650,11 @@ LOOKUP_WORKERS = 8
 # enclosing function in full.
 WIDE_DIFF_MAX_BYTES = 60000
 
+# A change whose diff is larger than this is not reviewed in one context:
+# prepare hands it to the orchestrated flow in agent/orc.md, which splits it
+# among several agents.  About one commit in a hundred is this large.
+SINGLE_AGENT_MAX_DIFF_BYTES = 30000
+
 # Callees that are not worth a lookup: what they do is known.
 TRIVIAL_CALLEES = STOP_WORDS | frozenset("""
     READ_ONCE WRITE_ONCE barrier min max min_t max_t clamp clamp_t BIT BIT_ULL
@@ -1021,12 +1026,56 @@ def build_pack(change: Change, code: CodeContext, rules: str) -> tuple[str, dict
     return head + "\n".join(text for _, text in parts), sizes
 
 
+def prepare_fan_out(change: Change, args: argparse.Namespace, out_dir: Path) -> None:
+    """Set up a change that is too large for one context for agent/orc.md."""
+    # A pack left by an earlier review must not be taken for this change's.
+    for stale in (PACK_NAME, DIFF_NAME, WIDE_DIFF_NAME, FINDINGS_NAME):
+        (out_dir / stale).unlink(missing_ok=True)
+
+    # The orchestrator's first phase is create_changes.py; run it here so
+    # that no agent has to be started for it.
+    command = [sys.executable, str(SCRIPT_DIR / "create_changes.py"), change.ref, "-o", str(out_dir)]
+    if args.git_dir:
+        command += ["-C", args.git_dir]
+    if args.no_semcode:
+        command.append("--no-semcode")
+    split = subprocess.run(command, capture_output=True, text=True, errors="replace")
+
+    state = {
+        "ref": change.ref,
+        "sha": change.sha,
+        "author": change.author,
+        "subject": change.subject,
+        "message": change.message,
+        "mode": "fan-out",
+        "diff-bytes": len(change.diff),
+    }
+    (out_dir / STATE_NAME).write_text(json.dumps(state, indent=2) + "\n")
+
+    name = change.sha[:12] if change.sha else os.path.basename(change.ref)
+    print(f"{name} (\"{change.subject}\") is too large to review in one context:")
+    print(f"  its diff is {len(change.diff) / 1000:.1f} KB and the limit is "
+          f"{SINGLE_AGENT_MAX_DIFF_BYTES // 1000} KB.")
+    print("No pack was written.  Review it with the orchestrated flow instead:")
+    print(f"  read {PROMPT_DIR / 'agent' / 'orc.md'} and follow it.")
+    if split.returncode == 0:
+        print(f"The context files its first phase makes are already in {out_dir}.")
+    else:
+        print("create_changes.py failed, so its first phase still has to build the context:")
+        print(f"  {split.stderr.strip()[-300:]}")
+    print("To review it with one agent anyway, run prepare again with --single.")
+
+
 def cmd_prepare(args: argparse.Namespace) -> None:
     change = load_change(args.change, args.git_dir, function_context=True)
     if not change.diff.strip():
         die(f"'{args.change}' has no diff to review")
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if len(change.diff) > SINGLE_AGENT_MAX_DIFF_BYTES and not args.single:
+        prepare_fan_out(change, args, out_dir)
+        return
 
     code = gather_code(change, args.git_dir, use_semcode=not args.no_semcode)
     rules = render_rules(select_rules(change))
@@ -1045,6 +1094,7 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         "author": change.author,
         "subject": change.subject,
         "message": change.message,
+        "mode": "single",
         "pack-bytes": len(pack),
         "part-bytes": sizes,
         "functions-changed": len(code.modified),
@@ -1411,6 +1461,9 @@ def cmd_finish(args: argparse.Namespace) -> None:
     if not state_path.is_file():
         die(f"{state_path} not found; run 'kreview.py prepare' first")
     state = json.loads(state_path.read_text())
+    if state.get("mode") == "fan-out":
+        die("this change was prepared for the orchestrated flow; agent/report.md "
+            "writes its review-inline.txt and review-metadata.json")
     findings_path = Path(args.findings) if args.findings else ctx_dir / FINDINGS_NAME
     head: dict[str, str] = {}
     findings: list[Finding] = []
@@ -1562,6 +1615,8 @@ def main() -> None:
     prepare.add_argument("-C", "--git-dir", default=None, help="git repository directory")
     prepare.add_argument("--no-semcode", action="store_true",
                          help="leave callers, callees and types out of the pack")
+    prepare.add_argument("--single", action="store_true",
+                         help="write a pack even for a change too large for one agent")
     prepare.set_defaults(func=cmd_prepare)
 
     finish = sub.add_parser("finish", help="write review-inline.txt and review-metadata.json")

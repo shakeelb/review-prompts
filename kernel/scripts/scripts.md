@@ -50,6 +50,12 @@ each part) and `diff.patch`, which `finish` reads.
 
 `review-core.md` runs `prepare` itself when the pack is not there yet.
 
+A change whose diff is over 30 KB, about one commit in a hundred, is too
+large to review in one context.  For such a change `prepare` writes no
+pack.  It runs `create_changes.py` into the same directory instead and says
+to follow `agent/orc.md`, which splits the change among several agents.
+`--single` writes the pack regardless.
+
 ### finish
 
 ```bash
@@ -266,7 +272,7 @@ review_one.sh [options] <sha>
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--linux <path>` | Path to the base linux directory | `./linux` |
-| `--prompt <file>` | Path to the review prompt file | `<script_dir>/../review-core.md` |
+| `--prompt <file>` | Path to the review prompt file | `<script_dir>/../review-core.md`, or `<script_dir>/../agent/orc.md` when `kreview.py prepare` finds the change too large for one agent |
 | `--series <sha>` | SHA of the last commit in the series (optional) | - |
 | `--working-dir <dir>` | Directory where worktrees are created | Current directory or `$WORKING_DIR` |
 | `--model <model>` | Claude model to use | `sonnet` or `$CLAUDE_MODEL` |

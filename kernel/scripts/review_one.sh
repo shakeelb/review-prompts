@@ -12,7 +12,8 @@ set -e
 usage() {
     echo "usage: review_one.sh [--linux <linux_dir>] [--prompt <prompt_file>] [--series <end_sha>] [--working-dir <dir>] [--model <model>] [--append <string>] <sha>"
     echo "  --linux: path to the base linux directory (default: \$PWD/linux)"
-    echo "  --prompt: path to the review prompt file (default: <script_dir>/../review-core.md)"
+    echo "  --prompt: path to the review prompt file (default: <script_dir>/../review-core.md,"
+    echo "            or <script_dir>/../agent/orc.md for a change too large for one agent)"
     echo "  sha: the git commit SHA to review"
     echo "  --series: optional SHA of the last commit in the series"
     echo "  --range: optional git range base..last_sha"
@@ -68,6 +69,7 @@ while [[ $# -gt 1 ]]; do
             ;;
         --prompt)
             REVIEW_PROMPT="$2"
+            PROMPT_GIVEN=1
             shift 2
             ;;
         --linux)
@@ -174,6 +176,14 @@ fi
 # at a time.  The review works without the pack, so a failure is not fatal.
 "$SCRIPT_DIR/kreview.py" prepare "$SHA" ||
     echo "Warning: kreview.py prepare failed, reviewing without a pack" >&2
+
+# One agent reviews the change unless prepare found it too large for one
+# context.  Such a change goes to the orchestrated flow, which splits it
+# among several agents, unless the caller chose the prompt.
+if [ -z "$PROMPT_GIVEN" ] && grep -q '"mode": "fan-out"' review-context/prepare.json 2>/dev/null; then
+    REVIEW_PROMPT="$SCRIPT_DIR/../agent/orc.md"
+    echo "Change is too large for one agent, using $REVIEW_PROMPT" >&2
+fi
 
 echo "Worktree ready at $DIR"
 echo "SHA: $SHA"

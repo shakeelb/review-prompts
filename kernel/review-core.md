@@ -53,6 +53,12 @@ one read.  With the pack loaded:
 - TASK 4 and Task 5 end with `scripts/kreview.py finish` instead of files
   written by hand, as TASK 4 describes.
 
+If `prepare` reports that the change is too large to review in one context,
+it has written no pack.  Stop following this prompt: read `agent/orc.md` in
+the prompt directory and follow it instead.  The files its first phase makes
+are already in `./review-context/`.  If you were asked for a single-agent
+review, run `prepare` again with `--single` and carry on here.
+
 If the script cannot be run, skip this section.  Everything below works
 without it.
 
