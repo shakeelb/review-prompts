@@ -6,11 +6,67 @@ These scripts automate the process of reviewing a series of git commits using Cl
 
 | Script | Purpose |
 |--------|---------|
+| `kreview.py` | Does the mechanical parts of a review so the model does not have to |
 | `create_changes.py` | Extracts and categorizes commit changes for structured review |
 | `review_one.sh` | Reviews a single commit SHA |
 | `claude_xargs.py` | Runs multiple reviews in parallel |
 | `claude-json.py` | Parses Claude's stream-json output to markdown |
 | `lore-reply` | Creates reply emails to patches on lore.kernel.org |
+
+---
+
+## kreview.py
+
+Does the parts of a review that need no judgement, so that the model spends
+neither context nor turns on them.  The prompts call it by its path in the
+prompt directory; nothing needs to be installed.
+
+### guides
+
+```bash
+kreview.py guides [-C <linux_dir>] [--list] [<commit_ref> | <patch_file>]
+kreview.py guides --for <path or symbol>...
+kreview.py section <guide.md> "<section title>"
+```
+
+`guides` applies the trigger table in `subsystem/subsystem.md` to a commit
+(default `HEAD`) or a patch file and prints the subsystem rules that apply,
+so the same change always loads the same guides.  It reads the triggers as
+follows:
+
+- A trigger with a `/` in it, or one that names a file (`Kconfig`,
+  `decode.c`, `*.rs`), is matched against the paths the change touches.
+  `*` stands for any run of characters within one path component.
+- Any other trigger is matched against the diff as the start of an
+  identifier, or of one of its underscore-separated words: `skb_` matches
+  `skb_put` and `__skb_put` but not `xskb_put`.  `*` stands for any run of
+  identifier characters.
+- `a` + `b` matches only when both do.
+- A trigger with a backslash in it is a regular expression.
+- A trigger that is a phrase (`dax operations`) is a hint for a reader and
+  is not matched.
+
+What is printed for a matching guide depends on how it matched:
+
+| Match | Printed |
+|-------|---------|
+| A path trigger, guide up to 8 KB | The whole guide |
+| A path trigger, larger guide | Sections that name an API the change adds or removes, sections that name no API at all, then sections about the surrounding functions until the guide's share reaches 8 KB |
+| A symbol on a changed line | Sections that name an API the change adds or removes |
+| A symbol only in unchanged context | Nothing; the guide is named |
+
+A guide under 2 KB is always printed whole.  Items of a `Quick Checks` list
+are selected one by one.  The titles of everything left out are listed, and
+`section` prints any of them.  All the rules for one change are capped at
+24 KB; past that, guides matched by a symbol are dropped first.
+
+`--list` prints the matching guides without their text.  `--for` names the
+guides for some paths and symbols, for work that is not a review of a
+change:
+
+```bash
+kreview.py guides --for mm/slub.c call_rcu
+```
 
 ---
 

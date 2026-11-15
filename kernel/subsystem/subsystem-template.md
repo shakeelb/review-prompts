@@ -181,4 +181,5 @@ additional items that don't warrant their own section.
 8. No single-commit-specific knowledge — every section must be reusable
 9. Quick Checks section at the end (if applicable)
 10. Code examples use `// CORRECT` / `// WRONG` labels
-11. Added to `subsystem.md` trigger table
+11. Added to `subsystem.md` trigger table, with at least one path or symbol
+    trigger (see `kreview.py guides` in `../scripts/scripts.md`)

@@ -40,7 +40,17 @@ correct - otherwise report them as regressions.
 
 ### Subsystem Guides MUST be loaded
 
-Read `subsystem/subsystem.md` and load all matching subsystem guides and critical patterns.
+In the tree under review, run the prompt directory's
+`scripts/kreview.py guides <commit or patch file>` and read all of its
+output.  It applies the trigger table in `subsystem/subsystem.md` to the
+change and prints the guide sections that apply to it, followed by the
+titles of the sections it left out.  Those titles are part of your
+instructions: when the analysis reaches code that a left-out section is
+about, print that section with the command the output gives and read it
+before continuing.
+
+Only if the script cannot be run: read `subsystem/subsystem.md` and load all
+matching subsystem guides and critical patterns.
 
 ### Commit Message Tags (load if subjective reviews are requested in prompt)
 
@@ -55,8 +65,9 @@ These default to off
 
 ## PATTERN DETECTION (check BEFORE Task 0)
 
-Scan the diff against all triggers in `subsystem/subsystem.md` and load matching files
-IMMEDIATELY.
+The output of `scripts/kreview.py guides` is the result of this step.  If the
+script could not be run, scan the diff against all triggers in
+`subsystem/subsystem.md` and load matching files IMMEDIATELY.
 
 ## Task 0: CONTEXT MANAGEMENT
 - Discard non-essential details after each task to manage token limits

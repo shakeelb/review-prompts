@@ -13,6 +13,12 @@ and ARM64 Hyp (EL2) rows — all four guides apply.
 The triggers column below includes both path names, function calls,
 and symbols regexes.
 
+`scripts/kreview.py guides` applies this table mechanically for the
+prompts that ask for it; `scripts/scripts.md` says how it reads each
+kind of trigger. A phrase such as `dax operations` is a hint for a
+reader that the script cannot match, so every row also needs a path or
+a symbol.
+
 ## Subsystem Guides
 
 > **Path resolution:** every filename in the "File" column below — and in the
@@ -47,8 +53,8 @@ and symbols regexes.
 | Workqueue | kernel/workqueue.c, work_struct | workqueue.md |
 | Syscalls | `SYSCALL_DEFINE`, `copy_from_user`, `copy_to_user`, `get_user`, `put_user`, any change to syscall parameter validation | syscall.md |
 | btrfs | fs/btrfs/ | btrfs.md |
-| DAX | dax operations | dax.md |
-| Block/NVMe | block layer, nvme | block.md |
+| DAX | fs/dax.c, drivers/dax/, dax_, dax operations | dax.md |
+| Block/NVMe | block/, drivers/block/, drivers/nvme/, blk_, bio_, nvme, block layer | block.md |
 | Boot Parameters | `__setup("`, `early_param("`, `module_param(`, `module_param_named(`, `core_param(`, `boot parameter`, `cmdline`, `command-line` | boot-params.md |
 | DRM/GPU | drivers/gpu/drm/, include/drm/, include/uapi/drm/, drm_atomic_, drm_crtc_, amdgpu_, amdkfd, hwseq, hw_sequencer | drm.md |
 | Media/V4L2 | drivers/media/, include/media/, v4l2_subdev_, V4L2_SUBDEV_, MEDIA_BUS_FMT_ | media.md |
@@ -73,12 +79,12 @@ and symbols regexes.
 | hwmon | drivers/hwmon/, hwmon_*, asus-ec-sensors, ec_board_info | hwmon.md |
 | Wireless/mac80211 | drivers/net/wireless/, net/mac80211/, BSS_CHANGED_, vif_cfg_changed, link_info_changed, bss_info_changed | wireless.md |
 | Selftests | tools/testing/selftests/, TEST_PROGS, TEST_FILES, TEST_GEN_FILES | selftests.md |
-| KUnit | kunit, KUNIT_CASE, KUNIT_ASSERT, KUNIT_EXPECT, kunit_test_suite, _kunit.c, .kunitconfig | kunit.md |
+| KUnit | kunit, KUNIT_CASE, KUNIT_ASSERT, KUNIT_EXPECT, kunit_test_suite, *_kunit.c, */.kunitconfig | kunit.md |
 | DT Bindings | Documentation/devicetree/bindings/, *.yaml in devicetree | dt-bindings.md |
 | USB Storage | drivers/usb/storage/, unusual_devs.h, UNUSUAL_DEV, USB_SC_, USB_PR_ | usb-storage.md |
 | ATA/libata | drivers/ata/, ata_dev_, ata_port_, ata_read_log_, ATA_QUIRK_ | ata.md |
 | I/O Accessors | writesl, readsl, writesw, readsw, writesb, readsb, __raw_writel, __raw_readl, FIFO | io-accessors.md |
-| Kconfig | Kconfig, `config `, `select `, `depends on `, `tristate `, `bool ` | kconfig.md |
+| Kconfig | Kconfig, arch/*/configs/, kernel/configs/ | kconfig.md |
 | Build System | Kbuild, Makefile, scripts/, tools/, `gnu11`, `-funsigned-char`, `-fno-strict-aliasing` | build.md |
 | I2C | drivers/i2c/, i2c_*, include/linux/i2c.h, i2c_transfer, i2c_master_send, i2c_master_recv, i2c_smbus_, i2c_get_dma_safe_msg_buf | i2c.md |
 | HID | drivers/hid/, include/linux/hid.h, hid_device, hid_driver, hid_register_driver, hid_hw_start, hid_hw_stop, hid_input_report, hid_safe_input_report | hid.md |
@@ -86,7 +92,7 @@ and symbols regexes.
 | GPIO | drivers/gpio/, include/linux/gpio/, linux/gpio.h, gpio_chip, gpiochip_, gpio_get_value, gpio_set_value, gpiod_get_raw_value, gpiod_set_raw_value, GPIO_GENERIC, GPIO_REGMAP | gpio.md |
 | Objtool | tools/objtool/, INSN_BUG, INSN_TRAP, decode.c | objtool.md |
 | KHO (Kexec Handover) | lib/test_kho.c, kho_, kho_is_enabled, kho_retrieve_subtree, kho_preserve_folio, kho_add_subtree, register_kho_notifier | kho.md |
-| Rust | any Rust code | rust.md |
+| Rust | *.rs, rust/, any Rust code | rust.md |
 | KVM | virt/kvm/, include/linux/kvm*, kvm_ | kvm.md |
 | ARM64 | arch/arm64/, sysreg | arm64.md |
 | ARM64 KVM (EL1/Host) | arch/arm64/kvm/ | kvm-arm64.md |
